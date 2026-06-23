@@ -84,6 +84,10 @@ class TextSemanticDeduplicationWorkflow:
     distance_metric: Literal["cosine", "l2"] = "cosine"
     which_to_keep: Literal["hard", "easy", "random"] = "hard"
     eps: float | None = 0.01
+    # Scale-dependent deduplication parameters
+    scale_aware: bool = False
+    target_model_params: int | None = None
+    corpus_size_tokens: int | None = None
     # K-means clustering parameters
     kmeans_max_iter: int = 300
     kmeans_tol: float = 1e-4
@@ -331,6 +335,9 @@ class TextSemanticDeduplicationWorkflow:
             # Duplicate identification parameters (optional)
             eps=self.eps,
             _duplicates_num_row_groups_hint=self._duplicates_num_row_groups_hint,
+            scale_aware=self.scale_aware,
+            target_model_params=self.target_model_params,
+            corpus_size_tokens=self.corpus_size_tokens,
             # I/O and storage parameters
             read_kwargs=self.cache_kwargs,
             write_kwargs=self.cache_kwargs,

@@ -152,6 +152,9 @@ Compare semantic deduplication with other methods:
 | `perform_removal` | bool | `True` | Whether to perform duplicate removal |
 | `text_field` | str | `"text"` | Name of the text field in input data |
 | `id_field` | str | `"_curator_dedup_id"` | Name of the ID field in the data |
+| `scale_aware` | bool | `False` | Enable scale-dependent threshold adjustment |
+| `target_model_params` | int | `None` | Target model parameter count for scale adjustment |
+| `corpus_size_tokens` | int | `None` | Target corpus size in tokens for scale adjustment |
 
 ### Similarity Threshold
 
@@ -161,6 +164,23 @@ Control deduplication aggressiveness with `eps`:
 - **Higher values** (such as 0.1): Less strict, more aggressive deduplication
 
 Experiment with different values to balance data reduction and dataset diversity.
+
+#### Scale-Dependent Deduplication
+
+Recent empirical findings show that gradient alignment for semantically equivalent documents increases with model capability, causing accelerated semantic collisions at large scales. Using a fixed `eps` calibrated on small runs can systematically over-retain semantic duplicates at production scale.
+
+You can enable scale-dependent deduplication by setting `scale_aware=True` along with `corpus_size_tokens` and `target_model_params`. This will automatically tighten the similarity threshold as corpus size and target model size increase based on power law collision rates. 
+
+**Recommended Base Thresholds (calibrated at 1B scale):**
+
+| Scale | Corpus Tokens | Model Parameters | Recommended `eps` (Base) |
+| --- | --- | --- | --- |
+| Small | 1B | 1B | 0.08 |
+| Medium | 10B | 10B | 0.06 |
+| Large | 100B | 100B | 0.04 |
+| Massive | 1T | 1T | 0.02 |
+
+> **Note:** A warning is logged when `target_model_params` is unset and corpus size exceeds 100B tokens, as semantic collisions may be significantly underestimated.
 
 <Accordion title="Embedding Models">
 
