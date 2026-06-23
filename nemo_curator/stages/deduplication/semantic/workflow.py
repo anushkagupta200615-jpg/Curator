@@ -93,6 +93,9 @@ class SemanticDeduplicationWorkflow(WorkflowBase):
         # Duplicate identification parameters (optional)
         eps: float | None = None,
         _duplicates_num_row_groups_hint: int | None = None,
+        scale_aware: bool = False,
+        target_model_params: int | None = None,
+        corpus_size_tokens: int | None = None,
         # I/O and storage parameters
         read_kwargs: dict[str, Any] | None = None,
         cache_kwargs: dict[str, Any] | None = None,
@@ -139,6 +142,9 @@ class SemanticDeduplicationWorkflow(WorkflowBase):
             # Duplicate identification parameters (optional)
             eps: Epsilon value for duplicate identification
             _duplicates_num_row_groups_hint: Number of row groups hint for duplicate removal
+            scale_aware: Enable scale-dependent threshold adjustment
+            target_model_params: Target model parameter count for scale adjustment
+            corpus_size_tokens: Target corpus size in tokens for scale adjustment
 
             # I/O and storage parameters
             read_kwargs: Keyword arguments for reading files (including storage_options)
@@ -185,6 +191,9 @@ class SemanticDeduplicationWorkflow(WorkflowBase):
         # Duplicate identification parameters
         self.eps = eps
         self._duplicates_num_row_groups_hint = _duplicates_num_row_groups_hint
+        self.scale_aware = scale_aware
+        self.target_model_params = target_model_params
+        self.corpus_size_tokens = corpus_size_tokens
 
         # I/O parameters
         self.read_kwargs = read_kwargs.copy() if read_kwargs else {}
@@ -234,6 +243,23 @@ class SemanticDeduplicationWorkflow(WorkflowBase):
             if missing_cols:
                 msg = f"Metadata fields {missing_cols} are required for ranking"
                 raise ValueError(msg)
+
+        if self.scale_aware:
+            from nemo_curator.stages.deduplication.semantic.scale_utils import SemanticCollisionAudit, calculate_scale_adjusted_eps
+            if self.corpus_size_tokens is None:
+                raise ValueError("corpus_size_tokens must be provided when scale_aware is True")
+            
+            if self.target_model_params is None and self.corpus_size_tokens > 100_000_000_000:
+                logger.warning("target_model_params is unset and corpus size exceeds 100B tokens! "
+                               "Semantic collisions may be underestimated.")
+            
+            if self.eps is not None:
+                audit = SemanticCollisionAudit(target_model_params=self.target_model_params)
+                audit.audit(self.eps, self.corpus_size_tokens)
+                
+                old_eps = self.eps
+                self.eps = calculate_scale_adjusted_eps(old_eps, self.corpus_size_tokens, self.target_model_params)
+                logger.info(f"Scale-aware adjustment: tightened eps from {old_eps} to {self.eps}")
 
     def _setup_directories(self) -> None:
         """Setup output directories with fsspec compliance."""
